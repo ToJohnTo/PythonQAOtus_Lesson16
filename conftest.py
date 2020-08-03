@@ -18,20 +18,21 @@ logging.basicConfig(format='%(levelname)s::%(filename)s::%(funcName)s::%(message
 LOG_LEVEL = 10  # DEBUG
 
 
-def driver_factory(browser):
+def driver_factory(browser, selenoid, test_name):
     if browser == "chrome":
         logger = logging.getLogger('chrome_fixture')
         logger.setLevel(LOG_LEVEL)
-        options = ChromeOptions()
-        options.headless = True
-        options.add_argument('--ignore-ssl-errors=yes')
-        options.add_argument('--ignore-certificate-errors')
-        logger.info("Подготовка среды для запуска тестов...")
-        caps = DesiredCapabilities.CHROME
-        caps['loggingPrefs'] = {'performance': 'ALL', 'browser': 'ALL'}
-        options.add_experimental_option('w3c', False)
-        driver = EventFiringWebDriver(webdriver.Chrome(desired_capabilities=caps, options=options), MyListener())
-        logger.debug("Браузер Chrome запущен со следующими desired_capabilities:{}".format(driver.desired_capabilities))
+        executor_url = f"http://{selenoid}:4444/wd/hub"
+        caps = {"browserName": browser,
+                "version": "83.0",
+                "enableVnc": True,
+                "enableVideo": True,
+                "enableLog": True,
+                "screenResolution": "1280x720",
+                "name": test_name}
+        driver = EventFiringWebDriver(webdriver.Remote(command_executor=executor_url, desired_capabilities=caps),
+                                      MyListener())
+        logger.info(f"Start session {driver.session_id}")
     elif browser == "firefox":
         profile = FirefoxProfile()
         profile.accept_untrusted_certs = True
@@ -45,13 +46,17 @@ def driver_factory(browser):
 
 def pytest_addoption(parser):
     parser.addoption("--browser", action="store", default="chrome")
+    parser.addoption("--selenoid", action="store", default="localhost")
 
 
 @pytest.fixture(scope="session")
 def browser(request):
     logger = logging.getLogger('browser_fixture')
     logger.setLevel(LOG_LEVEL)
-    driver = driver_factory(request.config.getoption("--browser"))
+    driver = driver_factory(request.config.getoption("--browser"),
+                            request.config.getoption("--selenoid"),
+                            request.node.name)
+
     driver.maximize_window()
 
     def fin():
@@ -65,43 +70,44 @@ def browser(request):
 @pytest.fixture()
 def base_page(browser):
     page = BasePage(browser)
-    page.go_to(url="http://localhost//")
+    page.go_to(url="http://demo.opencart.com/")
+    # page.go_to(url="http://localhost//")
     return page
 
 
 @pytest.fixture()
 def catalog_page(browser):
     page = CatalogPage(browser)
-    page.go_to(url="http://localhost/index.php?route=product/category&path=20")
+    page.go_to(url="http://demo.opencart.com/index.php?route=product/category&path=20")
     return page
 
 
 @pytest.fixture()
 def product_card_page(browser):
     page = ProductCardPage(browser)
-    page.go_to(url="http://localhost/index.php?route=product/product&path=57&product_id=49")
+    page.go_to(url="http://demo.opencart.com/index.php?route=product/product&path=57&product_id=49")
     return page
 
 
 @pytest.fixture()
 def login_page(browser):
     page = LoginPage(browser)
-    page.go_to(url="http://localhost/index.php?route=account/login")
+    page.go_to(url="http://demo.opencart.com/index.php?route=account/login")
     return page
 
 
 @pytest.fixture()
 def login_admin_page(browser):
     page = LoginAdminPage(browser)
-    page.go_to(url="http://localhost//admin/")
+    page.go_to(url="http://demo.opencart.com/admin/")
     return page
 
 
 @pytest.fixture()
 def products_table_page(browser):
     page = ProductsTablePage(browser)
-    page.go_to(url="http://localhost//admin/")
-    page.login('user', 'bitnami1')
+    page.go_to(url="http://demo.opencart.com/admin/")
+    page.login('demo', 'demo')      # page.login('user', 'bitnami1')
     page.open_products_table()
     return page
 
@@ -117,4 +123,4 @@ class MyListener(AbstractEventListener):
 
     def on_exception(self, exception, driver):
         logging.error(f'Oooops i got: {exception}')
-        driver.save_screenshot(f'{exception}.png')
+        driver.save_screenshot(driver.session_id + 'error.png')
