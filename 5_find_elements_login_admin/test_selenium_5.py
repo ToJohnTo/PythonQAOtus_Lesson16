@@ -2,7 +2,7 @@
 def test_login(login_admin_page):
     """ Check login """
     login_admin_page.logger.info('====== Started ======')
-    login_admin_page.login('user', 'bitnami1')
+    login_admin_page.login('demo', 'demo')      # login_admin_page.login('user', 'bitnami1')
     assert login_admin_page.driver.title == 'Dashboard'
     login_admin_page.logger.info('====== Finished ======')
 
